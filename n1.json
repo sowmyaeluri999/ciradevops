@@ -1,0 +1,439 @@
+{
+ "AWSTemplateFormatVersion": "2010-09-09",
+ "Description": "CloudFormation template for creating an ec2 instance with Auto Scaling",
+ "Parameters": {
+        
+	   
+		
+		
+        "ComparisonOperator": {
+			"Description": "Comparison Operator for Alarm",
+			"Type": "String",
+			"Default": "GreaterThanThreshold",
+			"AllowedValues": [
+				"GreaterThanOrEqualToThreshold",
+				"GreaterThanThreshold",
+				"LessThanThreshold",
+				"LessThanOrEqualToThreshold"
+			],
+			"ConstraintDescription": "must be a valid arithmetic operation to use when comparing the specified Statistic and Threshold. The specified Statistic value is used as the first operand."
+		},
+		"Statistic": {
+			"Description": "The statistic to apply to the alarm's associated metric",
+			"Type": "String",
+			"Default": "Average",
+			"AllowedValues": [
+				"SampleCount",
+				"Average",
+				"Sum",
+				"Minimum",
+				"Maximum"
+			],
+			"ConstraintDescription": "must be a valid statistic that can be applied to the alarm's associated metric."
+		},
+		"InstanceType": {
+			"Type": "String",
+			"Default": "t2.micro",
+			"AllowedValues": [
+				"t1.micro",
+				"t2.nano",
+				"t2.micro"
+			]
+		},
+		"KeyName": {
+			"Type": "AWS::EC2::KeyPair::KeyName",
+			"Default": "ciratraining"
+		},
+		"SSHLocation": {
+			"Description": "The IP address range that can be used to SSH to the EC2 instances",
+			"Type": "String",
+			"MinLength": "9",
+			"MaxLength": "18",
+			"Default": "0.0.0.0/0",
+			"AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+			"ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+          }
+		},
+  
+ 
+ "Resources": {
+    "ServerAutoGroup": {
+	   "Type": "AWS::AutoScaling::AutoScalingGroup",
+       "Properties": {
+	                 "LoadBalancerNames" : [{ "Ref" : "NLBLoadBalancer" }] ,
+					 "TargetGroupARNs" : [{ "Ref" : "NLBTargetGroup" } ],
+                     
+                       			
+                     "VPCZoneIdentifier": [ { "Ref": "SubnetOne" },
+                                           {  "Ref": "SubnetTwo" }],					
+					
+
+					"LaunchConfigurationName": {
+						"Ref": "LaunchConfig"
+					},
+					"MinSize": "1",
+					"MaxSize": "3"
+				}
+	},
+	"VPC":{
+		              "Type": "AWS::EC2::VPC",
+      	              "Properties" : {
+		                   "CiderBlock" : "10.0.0.0/16",
+			               "EnableDnsSupport" : "false",
+                           "EnableDnsHostnames" : "false",
+                            "InstanceTenancy" : "dedicated"
+      
+                           }
+    },
+	"SubnetOne" : {
+                       "Type" : "AWS::EC2::Subnet",
+                       "Properties" : {
+                            "VpcId" : { "Ref" : "VPC" },
+                            "CidrBlock" : "10.0.10.0/24",
+                            "AvailabilityZone" : "us-east-1a"
+      
+                        }
+    },
+	"SubnetTwo" : {
+                        "Type" : "AWS::EC2::Subnet",
+                        "Properties" : {
+                            "VpcId" : { "Ref" : "VPC" },
+                            "CidrBlock" : "10.0.20.0/24",
+                            "AvailabilityZone" : "us-east-1b"
+      
+                        }
+    },
+           
+       
+	
+	
+	"S3Bucket": {
+	  "Type": "AWS::S3::Bucket",
+	  "Properties": {
+					"BucketName": "s3soumya"
+				}
+	},
+
+	"SoumyaSecurityGroup": {
+	  "Type": "AWS::EC2::SecurityGroup",
+	  "Properties": {
+					"GroupDescription": "Enable SSH access and HTTP access on the inbound port",
+					"VpcId": {
+						"Ref": "VPC"
+					},
+					"SecurityGroupIngress": [ { "IpProtocol": "tcp","FromPort": "22","ToPort": "22","CidrIp": {"Ref": "SSHLocation"}},
+						                      { "IpProtocol": "tcp","FromPort": "80","ToPort": "80","CidrIp": "0.0.0.0/0" }
+                    ],
+
+					"SecurityGroupEgress": [{ "IpProtocol": "tcp","FromPort": "22","ToPort": "22","CidrIp": {"Ref": "SSHLocation"}},
+						                    { "IpProtocol": "tcp","FromPort": "80","ToPort": "80","CidrIp": "0.0.0.0/0" }],
+					"VpcId" : { "Ref" : "VPC" }						
+											
+				}
+	},
+
+
+
+
+
+	"SoumyaAlarm": {
+	  "Type": "AWS::CloudWatch::Alarm",
+	  "Properties": {
+					"AlarmDescription": "Alarm for EC2  Metric",
+					"AlarmActions": ["arn:aws:sns:us-east-1:276757432750:soumya"],
+					"ComparisonOperator": {
+						"Ref": "ComparisonOperator"
+					},
+					"EvaluationPeriods": "5",
+					"Statistic": {
+						"Ref": "Statistic"
+					},
+					"MetricName": "Soumya-notification",
+					"Namespace": "Soumya-notification",
+					"Period": "10",
+					"Threshold": "0",
+					"AlarmName": "Soumya"
+				}
+	},
+    "RootRole": {
+	     "Type": "AWS::IAM::Role",
+		 "Properties": {
+					"RoleName": "rootIamRole",
+					"AssumeRolePolicyDocument": {
+						"Version": "2012-10-17",
+						"Statement": [{
+							"Effect": "Allow",
+							"Principal": {
+								"Service": [
+									"ec2.amazonaws.com"
+								]
+							},
+							"Action": [
+								"sts:AssumeRole"
+							]
+						}
+					  ]
+					},
+			"Path": "/",
+
+				"Policies": [
+				       {
+							"PolicyName": "Ec2Permissions",
+							"PolicyDocument": {
+								"Version": "2012-10-17",
+								"Statement": [{
+									"Effect": "Allow",
+									"Action": [
+										"cloudwatch:PutMetricData",
+										"ec2:DescribeVolumes",
+										"ec2:DescribeTags",
+										"logs:PutLogEvents",
+										"logs:DescribeLogStreams",
+										"logs:DescribeLogGroups",
+										"logs:CreateLogStream",
+										"logs:CreateLogGroup"
+									],
+									"Resource": "arn:aws:logs:*:*:*"
+								}
+							  ]
+							}
+	},
+						{
+							"PolicyName": "s3Permissions",
+							"PolicyDocument": {
+								"Version": "2012-10-17",
+								"Statement": [
+								       {
+									"Effect": "Allow",
+									"Action": [
+										"s3:Listobject",
+										"s3:Listbucket",
+										"s3:Getobject"
+									],
+
+
+									"Resource": [
+										"arn:aws:s3:::s3soumya",
+										"arn:aws:s3:::s3soumya/*"
+									]
+								  }
+								
+							  ]
+							}
+						}
+					]
+				}
+	},
+	"myInstanceProfile": {
+	  "Type": "AWS::IAM::InstanceProfile",
+	  "Properties": {
+					"Path": "/",
+					"Roles": [
+					{
+						"Ref": "RootRole"
+					}
+				]
+			}
+	},
+	"CloudWatch": {
+	   "Type": "AWS::IAM::Policy",
+	   "Properties": {
+					"PolicyName": "root",
+					"PolicyDocument": {
+						"Version": "2012-10-17",
+						"Statement": [
+						{
+							"Effect": "Allow",
+							"Action": "*",
+							"Resource": "*"
+						}
+					  ]
+					},
+					"Roles": [
+					{
+						"Ref": "RootRole"
+					}
+				  ]
+				}
+	},
+
+
+
+	"MySNSTopic": {
+	   "Type": "AWS::SNS::Topic",
+	   "Properties": {
+					"Subscription": [
+					{
+						"Endpoint": "seluri@cirainfotech.com",
+						"Protocol": "email"
+					}
+				    ],
+					"TopicName": "soumya"
+				}
+	},
+	"LaunchConfig": {
+	    "Type": "AWS::AutoScaling::LaunchConfiguration",
+		"Metadata": {
+					"AWS::CloudFormation::Init": {
+						"config": {
+							"packages": {
+								"yum": {
+									"httpd": [
+
+									],
+									"wget": [
+
+									]
+								}
+							}
+						}
+					}
+	    },
+
+		"Properties": {
+					"KeyName": {
+						"Ref": "KeyName"
+					},
+					"BlockDeviceMappings": [
+					      {
+						"DeviceName": "/dev/sda1",
+						"Ebs": {
+							"VolumeSize": "30"
+						}
+					}
+					],
+												  
+							
+					
+				    
+					"NLBLoadBalancer" : {
+					          "Type" : "AWS::ElasticLoadBalancingV2::LoadBalancer",
+                              "Properties" : {
+                                    "IpAddressType" : "ipv4",
+                                    
+                                    "Name" : "NLBLoadBalancer", 
+                                    "Scheme" :  "internet-facing",
+                                    "SecurityGroups" : { "Ref" : "SoumyaSecurityGroup" },
+                                     
+                                    "Subnets" :  [ { "Ref": "SubnetOne" },
+                                                   {  "Ref": "SubnetTwo" }],
+                                     
+                                    "Type" : "network",
+									 "VpcId":{ 
+                                          "Ref":"VPC"
+                                    }
+									
+                               }
+					},
+					
+				   
+				   "NLBTargetGroup" : {
+                              "Type":"AWS::ElasticLoadBalancingV2::TargetGroup",
+                              "Properties":{ 
+                                  "Name":"NLBTargetGroup",
+                                   "Port":80,
+                                   "Protocol":"TCP",
+                                    
+                                    "Targets": [{  
+									        "Id" : { "Ref":"SubnetOne" },
+                                               "Port":80
+									},
+									{ 
+                                       "Id":{ "Ref":"SubnetTwo" },
+                                       "Port":80
+                                    }],
+                                       
+                                    "VpcId":{ 
+                                          "Ref":"VPC"
+                                    }
+                              }
+			        },
+                    "NLBListener":{ 
+                        "Type":"AWS::ElasticLoadBalancingV2::Listener",
+                        "Properties":{ 
+                             "DefaultActions":[ 
+                              { 
+                              "Type":"forward",
+                              "TargetGroupArn":{ 
+                              "Ref":"NLBTargetGroup"
+                                 }
+                                }
+                              ],
+                             "LoadBalancerArn":{ 
+                                "Ref":"NLBLoadBalancer"
+                              },
+                               "Port":"80",
+                               "Protocol":"TCP"
+                        }
+                    },
+                    
+                    							
+					
+	 
+ 
+
+
+					"ImageId": "ami-062f7200baf2fa504",
+					"SecurityGroups": [
+					{
+						"Ref": "SoumyaSecurityGroup"
+					}
+				    ],
+
+					"InstanceType": {
+						"Ref": "InstanceType"
+					},
+
+					"IamInstanceProfile": {
+						"Ref": "myInstanceProfile"
+					},
+
+
+					"AssociatePublicIpAddress": "true",
+					"UserData": {
+						"Fn::Base64": {
+							"Fn::Join": [
+								"",
+								[
+									"#!bin/bash\n",
+									"echo 'entered user data'\n",
+									"yum install httpd -y \n",
+									"systemctl start httpd \n",
+									"cd /var/www/html \n",
+									"wget  https://raw.githubusercontent.com/sowmyaeluri999/ciradevops/Developer/index.html \n",
+									"chmod 755 index.html \n",
+									"cd /home \n",
+									"echo 'enter jenkins installation'\n",
+									"yum update -y \n",
+									"wget -O /etc/yum.repos.d/jenkins.repo http://pkg.jenkins-ci.org/redhat/jenkins.repo \n",
+									"rpm --import  https://jenkins-ci.org/redhat/jenkins-ci.org.key \n",
+									"yum install jenkins -y \n",
+									"yum install git -y \n",
+									"yum install java-1.8.0 -y \n",
+									"yum install java-1.8.0-openjdk-devel -y \n",
+									"yum install -y awslogs \n",
+									"service awslogsd start \n",
+									"chkconfig awslogsd on \n",
+									"service jenkins start \n",
+									"chmod 777 /etc/awslogs/awscli.conf \n",
+									"chmod 777 /etc/awslogs/awslog.conf \n",
+									"sleep 30 \n",
+									"pwd \n",
+									"ls \n",
+									"sudo su \n",
+									"cat /var/lib/jenkins/secrets/initialAdminPassword >> /var/www/html/index.html \n",
+									"(crontab -l 2>/dev/null; echo \"*/1 * * * * cat /var/www/html/index.html >> /var/log/messages\") | crontab -"
+
+
+								]
+							
+							]
+							
+						}
+				}
+			}
+		
+		}
+	}
+}
+ 
