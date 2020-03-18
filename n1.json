@@ -3,7 +3,8 @@
  "Description": "CloudFormation template for creating an ec2 instance with Auto Scaling",
  "Parameters": {
         
-	   
+        
+	    
 		
 		
         "ComparisonOperator": {
@@ -62,10 +63,11 @@
        "Properties": {
 	                 "LoadBalancerNames" : [{ "Ref" : "NLBLoadBalancer" }] ,
 					 "TargetGroupARNs" : [{ "Ref" : "NLBTargetGroup" } ],
-                     
+					  
+					  "AvailabilityZones": [{ "Ref" : "Subnetone" },
+                                             { "Ref" : "Subnetone" } ],                     
                        			
-                     "VPCZoneIdentifier": [ { "Ref": "SubnetOne" },
-                                           {  "Ref": "SubnetTwo" }],					
+                    					
 					
 
 					"LaunchConfigurationName": {
@@ -75,34 +77,36 @@
 					"MaxSize": "3"
 				}
 	},
-	"VPC":{
-		              "Type": "AWS::EC2::VPC",
-      	              "Properties" : {
-		                   "CiderBlock" : "10.0.0.0/16",
-			               "EnableDnsSupport" : "false",
-                           "EnableDnsHostnames" : "false",
-                            "InstanceTenancy" : "dedicated"
-      
-                           }
+	"VPC" : {
+          "Type" : "AWS::EC2::VPC",
+          "Properties" : {
+                 "CidrBlock" : "10.0.50.0/16",
+                 "EnableDnsSupport" : "false",
+                 "EnableDnsHostnames" : "false",
+                 "InstanceTenancy" : "dedicated",
+                 "Tags" : [ {"Key" : "foo", "Value" : "bar"} ]
+             }
     },
-	"SubnetOne" : {
-                       "Type" : "AWS::EC2::Subnet",
-                       "Properties" : {
-                            "VpcId" : { "Ref" : "VPC" },
-                            "CidrBlock" : "10.0.10.0/24",
-                            "AvailabilityZone" : "us-east-1a"
-      
-                        }
+	"Subnetone" : {
+         "Type" : "AWS::EC2::Subnet",
+         "Properties" : {
+            "VpcId" : { "Ref" : "VPC" },
+            "CidrBlock" : "10.0.10.0/24",
+            "AvailabilityZone" : "us-east-1a",
+            "Tags" : [ { "Key" : "foo", "Value" : "bar" } ]
+        }
     },
-	"SubnetTwo" : {
-                        "Type" : "AWS::EC2::Subnet",
-                        "Properties" : {
-                            "VpcId" : { "Ref" : "VPC" },
-                            "CidrBlock" : "10.0.20.0/24",
-                            "AvailabilityZone" : "us-east-1b"
-      
-                        }
+	"Subnettwo" : {
+          "Type" : "AWS::EC2::Subnet",
+          "Properties" : {
+                "VpcId" : { "Ref" : "VPC" },
+                "CidrBlock" : "10.0.20.0/24",
+                "AvailabilityZone" : "us-east-1b",
+                "Tags" : [ { "Key" : "foo", "Value" : "bar" } ]
+        }
     },
+	
+	
            
        
 	
@@ -126,8 +130,8 @@
                     ],
 
 					"SecurityGroupEgress": [{ "IpProtocol": "tcp","FromPort": "22","ToPort": "22","CidrIp": {"Ref": "SSHLocation"}},
-						                    { "IpProtocol": "tcp","FromPort": "80","ToPort": "80","CidrIp": "0.0.0.0/0" }],
-					"VpcId" : { "Ref" : "VPC" }						
+						                    { "IpProtocol": "tcp","FromPort": "80","ToPort": "80","CidrIp": "0.0.0.0/0" }]
+											
 											
 				}
 	},
@@ -314,40 +318,34 @@
                                     "Name" : "NLBLoadBalancer", 
                                     "Scheme" :  "internet-facing",
                                     "SecurityGroups" : { "Ref" : "SoumyaSecurityGroup" },
-                                     
-                                    "Subnets" :  [ { "Ref": "SubnetOne" },
-                                                   {  "Ref": "SubnetTwo" }],
-                                     
-                                    "Type" : "network",
-									 "VpcId":{ 
-                                          "Ref":"VPC"
+                                    "Subnets" : [ { "Ref" : "Subnetone" } , { "Ref" : "Subnettwo" } ], 
+                                    
+                                    "Type" : "network"
+									 
                                     }
 									
-                               }
-					},
+                    },
+					
 					
 				   
 				   "NLBTargetGroup" : {
                               "Type":"AWS::ElasticLoadBalancingV2::TargetGroup",
                               "Properties":{ 
-                                  "Name":"NLBTargetGroup",
+							      "DependsOn" : "NLBLoadBalancer",
+                                  "Name" : "NLBTargetGroup",
                                    "Port":80,
                                    "Protocol":"TCP",
+								   "TargetType" : "instance",
                                     
                                     "Targets": [{  
-									        "Id" : { "Ref":"SubnetOne" },
-                                               "Port":80
-									},
-									{ 
-                                       "Id":{ "Ref":"SubnetTwo" },
-                                       "Port":80
-                                    }],
-                                       
-                                    "VpcId":{ 
-                                          "Ref":"VPC"
+									        "Id" : "instance",
+                                            "Port":80
+									}],
+									"VpcId" : "VPC"
+									
                                     }
-                              }
-			        },
+                    },
+			        
                     "NLBListener":{ 
                         "Type":"AWS::ElasticLoadBalancingV2::Listener",
                         "Properties":{ 
